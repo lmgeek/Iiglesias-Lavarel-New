@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Ministries')
+@section('title', 'Ministerios')
 
 @section('content')
 <div class="page-head">
     <div>
-        <h1 class="page-title">Ministries</h1>
+        <h1 class="page-title">Ministerios</h1>
         <p class="page-sub">Departamentos ministeriales de la iglesia</p>
     </div>
 </div>
@@ -13,7 +13,7 @@
 <div class="card animate-fade-in-up mb-24" style="max-width:600px">
     <div class="card-header">
         <div>
-            <h2 class="card-title">Nuevo ministry</h2>
+            <h2 class="card-title">Nuevo ministerio</h2>
         </div>
     </div>
     <form method="POST" action="{{ route('config.ministries.store') }}">
@@ -30,7 +30,7 @@
             </div>
         </div>
         <div class="mt-16">
-            <button type="submit" class="btn btn-primary">Crear ministry</button>
+            <button type="submit" class="btn btn-primary">Crear ministerio</button>
         </div>
     </form>
 </div>
@@ -39,14 +39,14 @@
     <div class="card-header">
         <div>
             <h2 class="card-title">Listado</h2>
-            <p class="card-sub">{{ $ministries->count() }} ministries registrados</p>
+            <p class="card-sub">{{ $ministries->count() }} ministerios registrados</p>
         </div>
     </div>
 
     @if ($ministries->isEmpty())
         <div class="empty">
-            <div class="empty-title">Sin ministries</div>
-            <p>Registra el primer ministry desde el formulario de arriba.</p>
+            <div class="empty-title">Sin ministerios</div>
+            <p>Registra el primer ministerio desde el formulario de arriba.</p>
         </div>
     @else
         @foreach ($ministries as $ministry)
@@ -56,7 +56,7 @@
                     <div class="list-item-title">{{ $ministry->name }}</div>
                     <div class="list-item-sub">{{ $ministry->description ?? 'Sin descripción' }}</div>
                 </div>
-                <form method="POST" action="{{ route('config.ministries.destroy', $ministry) }}" onsubmit="return confirm('¿Eliminar este ministry?')">
+                <form method="POST" action="{{ route('config.ministries.destroy', $ministry) }}" onsubmit="return confirm('¿Eliminar este ministerio?')">
                     @csrf
                     @method('DELETE')
                     <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>

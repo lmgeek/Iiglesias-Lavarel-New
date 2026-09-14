@@ -18,8 +18,9 @@ class RoleSeeder extends Seeder
                 'Miembros.*',
                 'Oración.*',
                 'Reportes.*',
-                'Configuración.view',
+                'Configuración.*',
                 'Biblioteca.*',
+                'Calendario.*',
             ],
             'Lider' => [
                 'Relacionamiento.*',
@@ -28,6 +29,10 @@ class RoleSeeder extends Seeder
                 'Oración.view',
                 'Reportes.view',
                 'Biblioteca.view',
+                'Calendario.view',
+                'Calendario.create',
+                'Calendario.edit',
+                'Calendario.delete',
             ],
             'Pastor' => [
                 'Relacionamiento.*',
@@ -36,6 +41,7 @@ class RoleSeeder extends Seeder
                 'Oración.*',
                 'Reportes.view',
                 'Biblioteca.*',
+                'Calendario.*',
             ],
             'Facilitador' => [
                 'Relacionamiento.view',
@@ -45,18 +51,21 @@ class RoleSeeder extends Seeder
                 'Miembros.view',
                 'Oración.view',
                 'Biblioteca.view',
+                'Calendario.view',
             ],
             'Miembro' => [
                 'Relacionamiento.view',
                 'Informes.view',
                 'Oración.view',
                 'Biblioteca.view',
+                'Calendario.view',
             ],
             'Usuario' => [
                 'Relacionamiento.view',
                 'Informes.view',
                 'Oración.view',
                 'Biblioteca.view',
+                'Calendario.view',
             ],
         ];
 
@@ -69,8 +78,19 @@ class RoleSeeder extends Seeder
             if ($permissions === '*') {
                 $role->givePermissionTo(Permission::all());
             } else {
-                $perms = Permission::whereIn('name', $permissions)->get();
-                $role->syncPermissions($perms);
+                $expanded = collect($permissions)
+                    ->flatMap(function (string $pattern) {
+                        if (str_ends_with($pattern, '.*')) {
+                            $prefix = substr($pattern, 0, -2);
+
+                            return Permission::where('name', 'like', $prefix.'.%')->pluck('name');
+                        }
+
+                        return [$pattern];
+                    })
+                    ->values();
+
+                $role->syncPermissions($expanded);
             }
         }
 

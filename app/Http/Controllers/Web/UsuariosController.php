@@ -71,7 +71,10 @@ class UsuariosController extends Controller
             'is_active' => 'boolean',
             'roles' => 'sometimes|array',
             'roles.*' => 'integer|exists:roles,id',
+            'password' => 'nullable|string|min:6|confirmed',
         ]);
+
+        unset($data['password'], $data['password_confirmation']);
 
         $data['is_active'] = $request->boolean('is_active');
         $data['lider_celula'] = $data['lider_celula'] ?? 'No';
@@ -79,9 +82,17 @@ class UsuariosController extends Controller
 
         $user->update($data);
 
+        if ($request->filled('password')) {
+            $user->password = $request->password;
+            $user->save();
+        }
+
         if ($request->has('roles')) {
             $roles = Role::whereIn('id', $request->roles)->get();
             $user->syncRoles($roles);
+
+            $hasLider = $roles->contains(fn (Role $role) => $role->name === 'Lider');
+            $user->update(['is_leader' => $hasLider]);
         }
 
         return redirect()->route('usuarios.index')

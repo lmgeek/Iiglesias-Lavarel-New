@@ -1293,3 +1293,44 @@ td.td-muted {
 .sidebar .church-contact-item:hover {
   color: #fff;
 }
+
+/* ---------- Dark theme ---------- */
+[data-theme="dark"] {
+  --bg-primary: #14110f;
+  --bg-secondary: #1e1a17;
+  --bg-tertiary: #26211d;
+  --text-primary: #f0ece6;
+  --text-secondary: #b8afa6;
+  --text-tertiary: #7d746c;
+  --border-light: #2e2823;
+  --border-medium: #433a33;
+
+  --cat-50: #2a2014;
+  --cat-100: #3a2c1a;
+  --cat-200: #573f22;
+  --cat-300: #8a5f2d;
+  --cat-400: #d48a30;
+  --cat-500: #e0a24e;
+
+  --stone-850: #12100e;
+}
+
+[data-theme="dark"] .app-header {
+  background: rgba(20, 17, 15, 0.85);
+}
+
+[data-theme="dark"] .theme-icon-light {
+  display: none;
+}
+
+[data-theme="light"] .theme-icon-dark {
+  display: none;
+}
+
+[data-theme="dark"] .nav-link {
+  color: #b8afa6;
+}
+
+[data-theme="dark"] .sidebar-user {
+  color: #e8e5df;
+}

@@ -7,6 +7,7 @@ use App\Models\CalendarEvent;
 use App\Models\MeetingsTheme;
 use App\Models\Relationship;
 use App\Models\ReportCelula;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -44,11 +45,10 @@ class DashboardController extends Controller
             ->orderBy('created_at', 'desc')
             ->first();
 
-        $semanaEventos = CalendarEvent::whereNull('deleted_at')
-            ->whereBetween('start_date', [now()->startOfWeek(), now()->endOfWeek()])
-            ->orderBy('start_date')
-            ->orderBy('start_time')
-            ->get();
+        $weekStart = now()->startOfWeek(Carbon::SUNDAY);
+        $weekEnd = $weekStart->copy()->addDays(6)->endOfDay();
+
+        $semanaEventos = CalendarEvent::occurrencesInRange($weekStart, $weekEnd);
 
         return view('dashboard.index', [
             'stats' => [
@@ -59,6 +59,8 @@ class DashboardController extends Controller
             ],
             'ultimoTema' => $ultimoTema,
             'semanaEventos' => $semanaEventos,
+            'semanaInicio' => $weekStart,
+            'semanaFin' => $weekEnd->copy()->addDays(6)->startOfDay(),
         ]);
     }
 }

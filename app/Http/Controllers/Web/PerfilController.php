@@ -45,4 +45,13 @@ class PerfilController extends Controller
 
         return back()->with('success', 'Perfil actualizado correctamente');
     }
+
+    public function tema(Request $request)
+    {
+        $data = $request->validate(['theme' => 'required|in:light,dark']);
+
+        Auth::user()->update(['theme' => $data['theme']]);
+
+        return response()->json(['ok' => true]);
+    }
 }

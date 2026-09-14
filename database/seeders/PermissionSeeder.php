@@ -18,6 +18,7 @@ class PermissionSeeder extends Seeder
             'Reportes',
             'Configuración',
             'Biblioteca',
+            'Calendario',
         ];
 
         $actions = ['view', 'create', 'edit', 'delete'];

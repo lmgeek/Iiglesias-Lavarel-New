@@ -122,6 +122,26 @@
         </div>
     </div>
 
+    <div class="card animate-fade-in-up mb-24" style="max-width:860px">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Contraseña</h2>
+            </div>
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="password">Nueva contraseña</label>
+                <input id="password" type="password" name="password" class="input" autocomplete="new-password">
+                @error('password')<div class="field-error">{{ $message }}</div>@enderror
+            </div>
+            <div class="form-group">
+                <label for="password_confirmation">Confirmar contraseña</label>
+                <input id="password_confirmation" type="password" name="password_confirmation" class="input" autocomplete="new-password">
+            </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-tertiary);margin-top:4px">Dejá en blanco para mantener la contraseña actual.</p>
+    </div>
+
     <div class="mt-24">
         <button type="submit" class="btn btn-primary">Guardar cambios</button>
         <a href="{{ route('usuarios.index') }}" class="btn btn-secondary">Cancelar</a>

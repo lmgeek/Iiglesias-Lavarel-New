@@ -7,6 +7,7 @@ use App\Http\Controllers\Web\CalendarioController;
 use App\Http\Controllers\Web\ConfigController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\InformesController;
+use App\Http\Controllers\Web\LideresController;
 use App\Http\Controllers\Web\MiembrosController;
 use App\Http\Controllers\Web\OracionController;
 use App\Http\Controllers\Web\PerfilController;
@@ -46,6 +47,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/relacionamiento/informes', [RelacionamientoController::class, 'informes'])->name('relacionamiento.informes');
         Route::get('/relacionamiento/mired', [RelacionamientoController::class, 'red'])->name('relacionamiento.red');
         Route::post('/relacionamiento', [RelacionamientoController::class, 'store'])->name('relacionamiento.store');
+        Route::delete('/relacionamiento/{disciple}', [RelacionamientoController::class, 'destroy'])->name('relacionamiento.destroy');
         Route::get('/discipulos/buscar', [RelacionamientoController::class, 'searchDisciples'])->name('relacionamiento.buscar');
         Route::get('/relacionamiento/{disciple}/informe', [RelacionamientoController::class, 'informeCreate'])->name('relacionamiento.informe.create');
         Route::post('/relacionamiento/{disciple}/informe', [RelacionamientoController::class, 'informeStore'])->name('relacionamiento.informe.store');
@@ -85,17 +87,27 @@ Route::middleware('auth')->group(function () {
         Route::get('/biblioteca/{material}/descargar', [BibliotecaController::class, 'download'])->name('biblioteca.download');
 
         // Perfil
-        Route::get('/perfil', [PerfilController::class, 'index'])->name('perfil.index');
+Route::get('/perfil', [PerfilController::class, 'index'])->name('perfil.index');
+
         Route::post('/perfil', [PerfilController::class, 'update'])->name('perfil.update');
 
+        Route::post('/perfil/tema', [PerfilController::class, 'tema'])->name('perfil.tema');
         // Usuarios
         Route::get('/usuarios', [UsuariosController::class, 'index'])->name('usuarios.index');
         Route::get('/usuarios/{user}/editar', [UsuariosController::class, 'edit'])->name('usuarios.edit');
         Route::put('/usuarios/{user}', [UsuariosController::class, 'update'])->name('usuarios.update');
         Route::delete('/usuarios/{user}', [UsuariosController::class, 'destroy'])->name('usuarios.destroy');
 
+        // Líderes
+        Route::get('/lideres', [LideresController::class, 'index'])->name('lideres.index');
+        Route::post('/lideres', [LideresController::class, 'store'])->name('lideres.store');
+        Route::put('/lideres/{user}', [LideresController::class, 'update'])->name('lideres.update');
+        Route::delete('/lideres/{user}', [LideresController::class, 'destroy'])->name('lideres.destroy');
+
         // Configuración
         Route::get('/configuracion/roles', [ConfigController::class, 'roles'])->name('config.roles');
+        Route::post('/configuracion/roles/{role}/permisos', [ConfigController::class, 'rolesUpdate'])->name('config.roles.permissions');
+        Route::get('/configuracion/calendario-log', [ConfigController::class, 'calendarioLog'])->name('config.calendario_log');
         Route::get('/configuracion/temas', [ConfigController::class, 'temas'])->name('config.temas');
         Route::post('/configuracion/temas', [ConfigController::class, 'temasStore'])->name('config.temas.store');
         Route::get('/configuracion/ajustes', [ConfigController::class, 'ajustes'])->name('config.ajustes');

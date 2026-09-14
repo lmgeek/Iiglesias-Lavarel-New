@@ -81,7 +81,7 @@
         <div class="card-header">
             <div>
                 <h2 class="card-title">Eventos de esta semana</h2>
-                <p class="card-sub">{{ now()->startOfWeek()->locale('es')->translatedFormat('d M') }} – {{ now()->endOfWeek()->locale('es')->translatedFormat('d M Y') }}</p>
+                <p class="card-sub">{{ $semanaInicio->locale('es')->translatedFormat('d M') }} – {{ $semanaFin->locale('es')->translatedFormat('d M Y') }}</p>
             </div>
             <a href="{{ route('calendario.index') }}" style="font-size:12.5px;color:var(--cat-600);font-weight:500">Ver calendario</a>
         </div>

@@ -50,7 +50,7 @@
         border-bottom: 1px solid var(--border-light);
         padding: 6px;
         min-height: 92px;
-        cursor: {{ $canEdit ? 'pointer' : 'default' }};
+        cursor: pointer;
         background: var(--card-bg);
         transition: background .15s;
         position: relative;
@@ -142,19 +142,17 @@
     </div>
 
     <div class="cal-grid">
+        <div class="cal-header">Dom</div>
         <div class="cal-header">Lun</div>
         <div class="cal-header">Mar</div>
         <div class="cal-header">Mié</div>
         <div class="cal-header">Jue</div>
         <div class="cal-header">Vie</div>
         <div class="cal-header">Sáb</div>
-        <div class="cal-header">Dom</div>
 
         @foreach ($cells as $cell)
             <div class="cal-cell {{ !$cell['isCurrentMonth'] ? 'other-month' : '' }} {{ $cell['isToday'] ? 'today' : '' }}"
-                 @if ($canEdit)
-                    onclick="openEventModal('{{ $cell['date']->format('Y-m-d') }}', event)"
-                 @endif
+                 onclick="openDay('{{ $cell['date']->format('Y-m-d') }}')"
             >
                 <div class="cal-day-head">
                     <span class="cal-day-num">{{ $cell['dayNumber'] }}</span>
@@ -168,7 +166,7 @@
                     >{{ $ev->title }}</span>
                 @endforeach
                 @if ($cell['events']->count() > 3)
-                    <span class="cal-more">{{ $cell['events']->count() - 3 }} más</span>
+                    <span class="cal-more" onclick="event.stopPropagation(); openDay('{{ $cell['date']->format('Y-m-d') }}')">{{ $cell['events']->count() - 3 }} más</span>
                 @endif
                 @if (isset($meetings[$cell['date']->format('Y-m-d')]))
                     <span class="cal-event" style="background:#16a34a" title="Encuentro de discipulado">&#128214; {{ $meetings[$cell['date']->format('Y-m-d')]->count() }} encuentro(s)</span>
@@ -177,6 +175,74 @@
         @endforeach
     </div>
 </div>
+
+<!-- Modal: eventos del día -->
+<div class="modal-overlay" id="dayModal" style="display:none">
+    <div class="modal-card" style="max-width:520px;max-height:85vh;overflow-y:auto">
+        <div class="modal-head">
+            <div>
+                <h3 id="dayModalTitle">Eventos del día</h3>
+                <div id="dayModalSub" class="page-sub" style="margin-top:2px"></div>
+            </div>
+            <button type="button" class="modal-close" onclick="closeDayModal()">&times;</button>
+        </div>
+        <div id="dayModalBody"></div>
+    </div>
+</div>
+
+@push('styles')
+<style>
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: var(--stone-900);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    .modal-card {
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 22px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(12, 10, 9, .45);
+        border: 1px solid var(--border-light);
+    }
+    .modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+    .modal-head h3 { font-size: 17px; }
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--text-tertiary);
+    }
+    .modal-close:hover { color: var(--text-primary); }
+    .day-event {
+        background: var(--bg-tertiary);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+    }
+    .day-event-title { font-weight: 500; }
+    .day-event-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .day-section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--text-tertiary);
+        margin: 14px 0 8px;
+    }
+</style>
+@endpush
 
 @if ($canEdit)
 <div class="modal-overlay" id="eventModal" style="display:none">
@@ -268,40 +334,6 @@
 
 @push('styles')
 <style>
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        background: var(--stone-900);
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
-    .modal-card {
-        background: var(--card-bg);
-        border-radius: 16px;
-        padding: 22px;
-        width: 100%;
-        box-shadow: 0 20px 60px rgba(12, 10, 9, .45);
-        border: 1px solid var(--border-light);
-    }
-    .modal-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 18px;
-    }
-    .modal-head h3 { font-size: 17px; }
-    .modal-close {
-        background: none;
-        border: none;
-        font-size: 24px;
-        line-height: 1;
-        cursor: pointer;
-        color: var(--text-tertiary);
-    }
-    .modal-close:hover { color: var(--text-primary); }
     .color-palette {
         display: flex;
         gap: 8px;
@@ -455,4 +487,118 @@
 </script>
 @endpush
 @endif
+
+@push('scripts')
+<script>
+    window.DAY_EVENTS = {!! $events->map(function ($evs, $dateKey) {
+        return $evs->map(function ($ev) {
+            return [
+                'id' => $ev->id,
+                'title' => $ev->title,
+                'description' => $ev->description,
+                'location' => $ev->location,
+                'color' => $ev->color,
+                'start_date' => $ev->start_date?->format('Y-m-d'),
+                'start_time' => $ev->start_time,
+                'end_time' => $ev->end_time,
+                'all_day' => (bool) $ev->all_day,
+                'is_recurring' => (bool) $ev->is_recurring,
+                'recurring_frequency' => $ev->recurring_frequency,
+            ];
+        })->values();
+    })->toJson() !!};
+
+    window.DAY_MEETINGS = {!! $meetings->map(function ($ms, $dateKey) {
+        return $ms->map(function ($m) {
+            return [
+                'disciple' => $m->disciple?->fullname ?? 'Discípulo',
+            ];
+        })->values();
+    })->toJson() !!};
+
+    window.dayModalTitle = document.getElementById('dayModalTitle');
+    window.dayModalSub = document.getElementById('dayModalSub');
+    window.dayModalBody = document.getElementById('dayModalBody');
+    window.CAN_EDIT = @json($canEdit);
+
+    function fmtDayLabel(dateStr) {
+        var d = new Date(dateStr + 'T00:00:00');
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function openDay(dateStr) {
+        var events = (window.DAY_EVENTS && window.DAY_EVENTS[dateStr]) ? window.DAY_EVENTS[dateStr] : [];
+        var meets = (window.DAY_MEETINGS && window.DAY_MEETINGS[dateStr]) ? window.DAY_MEETINGS[dateStr] : [];
+
+        dayModalTitle.textContent = 'Eventos del día';
+        dayModalSub.textContent = fmtDayLabel(dateStr);
+        dayModalBody.innerHTML = '';
+
+        if (!events.length && !meets.length) {
+            dayModalBody.innerHTML = '<div class="empty"><div class="empty-title">Sin eventos</div><p>Este día no tiene eventos ni encuentros programados.</p></div>';
+        } else {
+            var html = '';
+
+            if (events.length) {
+                events.forEach(function (ev) {
+                    var time = ev.all_day ? 'Todo el día' : ((ev.start_time || '') + (ev.end_time ? ' – ' + ev.end_time : ''));
+                    var meta = [];
+                    if (time) meta.push(time);
+                    if (ev.location) meta.push(ev.location);
+                    html += '<div class="day-event" style="border-left:4px solid ' + (ev.color || '#c57125') + '">';
+                    html += '<div class="day-event-title">' + escHtml(ev.title) + '</div>';
+                    if (meta.length) html += '<div class="day-event-meta">' + meta.map(escHtml).join(' · ') + '</div>';
+                    if (ev.is_recurring) html += '<div class="day-event-meta">Repite: ' + escHtml(ev.recurring_frequency || 'Sí') + '</div>';
+                    if (window.CAN_EDIT) html += '<button type="button" class="btn btn-sm btn-secondary" onclick="editFromDay(' + ev.id + ')" style="margin-top:6px">Ver / Editar</button>';
+                    html += '</div>';
+                });
+            }
+
+            if (meets.length) {
+                html += '<div class="day-section-title">Encuentros de discipulado</div>';
+                meets.forEach(function (m) {
+                    html += '<div class="day-event" style="border-left:4px solid #16a34a">';
+                    html += '<div class="day-event-title">' + escHtml(m.disciple) + '</div>';
+                    html += '</div>';
+                });
+            }
+
+            dayModalBody.innerHTML = html;
+        }
+
+        document.getElementById('dayModal').style.display = 'flex';
+    }
+
+    window.closeDayModal = function () {
+        document.getElementById('dayModal').style.display = 'none';
+    };
+
+    function escHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    function editFromDay(eventId) {
+        var ev = null;
+        for (var k in window.DAY_EVENTS) {
+            (window.DAY_EVENTS[k] || []).forEach(function (e) { if (e.id === eventId) ev = e; });
+        }
+        closeDayModal();
+        if (window.openEventModal && ev) {
+            openEventModal(undefined, undefined, ev);
+        }
+    }
+
+    document.getElementById('dayModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDayModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        var dm = document.getElementById('dayModal');
+        if (e.key === 'Escape' && dm && dm.style.display === 'flex') closeDayModal();
+    });
+</script>
+@endpush
 @endsection

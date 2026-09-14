@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\MeetingsTheme;
 use App\Models\Relationship;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -185,17 +184,28 @@ class RelacionamientoController extends Controller
         return $total;
     }
 
+    public function destroy(Request $request, User $disciple)
+    {
+        $user = Auth::user();
+
+        Relationship::where('mentor_id', $user->id)
+            ->where('disciple_id', $disciple->id)
+            ->whereNull('deleted_at')
+            ->delete();
+
+        return redirect()->route('relacionamiento.index')
+            ->with('success', 'Discípulo eliminado de tu lista');
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
             'disciple_id' => 'required|integer|exists:users,id',
             'suspended' => 'sometimes|in:Si,No',
             'why_suspended' => 'nullable|string',
-            'theme_meetings_id' => 'nullable|integer|exists:meetings_themes,id',
             'other_theme' => 'nullable|string|max:255',
             'culminate' => 'nullable|string|max:255',
             'initiative' => 'nullable|string|max:255',
-            'reading' => 'nullable|string|max:255',
             'testimonials' => 'nullable|string|max:255',
             'pray_together' => 'nullable|string|max:255',
             'description' => 'nullable|string',
@@ -243,7 +253,6 @@ class RelacionamientoController extends Controller
 
         return view('relacionamiento.informe', [
             'disciple' => $disciple,
-            'themes' => MeetingsTheme::whereNull('deleted_at')->orderBy('classname')->get(),
         ]);
     }
 
@@ -269,11 +278,9 @@ class RelacionamientoController extends Controller
             'f_meet' => 'required|date',
             'suspended' => 'sometimes|in:Si,No',
             'why_suspended' => 'nullable|string',
-            'theme_meetings_id' => 'nullable|integer|exists:meetings_themes,id',
             'other_theme' => 'nullable|string|max:255',
             'culminate' => 'nullable|string|max:255',
             'initiative' => 'nullable|string|max:255',
-            'reading' => 'nullable|string|max:255',
             'testimonials' => 'nullable|string|max:255',
             'pray_together' => 'nullable|string|max:255',
             'description' => 'nullable|string',

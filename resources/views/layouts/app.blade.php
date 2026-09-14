@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
     @stack('styles')
 </head>
-<body>
+<body data-theme="{{ auth()->user()?->theme ?? 'light' }}">
     <div class="app-shell">
         @include('layouts.partials.sidebar')
 
@@ -65,6 +65,33 @@
                 link.classList.add('active');
             });
         });
+
+        var preferredTheme = localStorage.getItem('iglesia_theme');
+        var initialTheme = preferredTheme || '{{ auth()->user()?->theme ?? 'light' }}';
+
+        document.body.setAttribute('data-theme', initialTheme);
+
+        function currentTheme() {
+            return document.body.getAttribute('data-theme') || 'light';
+        }
+
+        function applyTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('iglesia_theme', theme);
+        }
+
+        function toggleTheme() {
+            var next = currentTheme() === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            fetch('{{ route('perfil.tema') }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                    'Accept': 'application/json',
+                },
+                body: new URLSearchParams({ theme: next }),
+            }).catch(function () {});
+        }
     </script>
     @stack('scripts')
 </body>

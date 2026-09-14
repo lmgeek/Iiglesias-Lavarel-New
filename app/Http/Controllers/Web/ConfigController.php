@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\CalendarLog;
 use App\Models\ChurchConfig;
 use App\Models\MeetingsTheme;
 use App\Models\Ministry;
@@ -11,6 +12,7 @@ use App\Services\ImgbbService;
 use App\Services\MigracionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class ConfigController extends Controller
@@ -24,9 +26,55 @@ class ConfigController extends Controller
 
     public function roles()
     {
-        $roles = Role::with('permissions')->orderBy('name')->get();
+        abort_unless(
+            auth()->user()->can('Configuración.view'),
+            403,
+            'No tienes permisos para gestionar roles.'
+        );
 
-        return view('config.roles', ['roles' => $roles]);
+        $roles = Role::with('permissions')->orderBy('name')->get();
+        $permissions = Permission::orderBy('name')->get();
+
+        return view('config.roles', ['roles' => $roles, 'permissions' => $permissions]);
+    }
+
+    public function rolesUpdate(Request $request, Role $role)
+    {
+        abort_unless(
+            auth()->user()->can('Configuración.view'),
+            403,
+            'No tienes permisos para gestionar roles.'
+        );
+
+        $data = $request->validate([
+            'permissions' => 'sometimes|array',
+            'permissions.*' => 'integer|exists:permissions,id',
+        ]);
+
+        if (! $request->has('permissions')) {
+            $role->syncPermissions([]);
+        } else {
+            $role->syncPermissions($data['permissions']);
+        }
+
+        return back()->with('success', "Permisos de «{$role->name}» actualizados correctamente");
+    }
+
+    public function calendarioLog()
+    {
+        $allowedRoles = ['Admin', 'Supervisor', 'Pastor'];
+
+        abort_unless(
+            optional(auth()->user()->roles->first())->name && in_array(auth()->user()->roles->first()->name, $allowedRoles),
+            403,
+            'No tienes permisos para ver el log de calendario.'
+        );
+
+        $logs = CalendarLog::with(['event', 'user'])
+            ->orderByDesc('created_at')
+            ->paginate(30);
+
+        return view('config.calendario-log', ['logs' => $logs]);
     }
 
     public function temas()
@@ -124,14 +172,14 @@ class ConfigController extends Controller
 
         Ministry::create($data);
 
-        return back()->with('success', 'Ministry creado correctamente');
+        return back()->with('success', 'Ministerio creado correctamente');
     }
 
     public function ministriesDestroy(Ministry $ministry)
     {
         $ministry->delete();
 
-        return back()->with('success', 'Ministry eliminado');
+        return back()->with('success', 'Ministerio eliminado');
     }
 
     public function sedes()

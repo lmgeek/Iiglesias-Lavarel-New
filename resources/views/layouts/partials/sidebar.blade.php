@@ -108,7 +108,7 @@
 
         <div class="nav-section-title">General</div>
 
-        @can('Configuración.view')
+        @can('Calendario.view')
         <a class="nav-link @if (request()->routeIs('calendario.index')) active @endif" href="{{ route('calendario.index') }}">
             <span class="nav-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -118,6 +118,15 @@
             Calendario
         </a>
         @endcan
+
+        <a class="nav-link @if (request()->routeIs('lideres.index')) active @endif" href="{{ route('lideres.index') }}">
+            <span class="nav-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M6 21v-2a4 4 0 0 0-4-4" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+            </span>
+            Líderes
+        </a>
 
         @can('Reportes.view')
         <a class="nav-link @if (request()->routeIs('reportes.index')) active @endif" href="{{ route('reportes.index') }}">
@@ -152,8 +161,9 @@
         </a>
         @endcan
 
-        @can('Configuración.view')
+        @if (Auth::user()->can('Configuración.view') || in_array(optional(Auth::user()->roles->first())->name, ['Admin', 'Supervisor', 'Pastor']))
         <div class="nav-section-title">Configuración</div>
+        @can('Configuración.view')
         <a class="nav-link @if (request()->routeIs('config.roles')) active @endif" href="{{ route('config.roles') }}">
             <span class="nav-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -162,6 +172,18 @@
             </span>
             Roles
         </a>
+        @endcan
+        @if (in_array(optional(Auth::user()->roles->first())->name, ['Admin', 'Supervisor', 'Pastor']))
+        <a class="nav-link @if (request()->routeIs('config.calendario_log')) active @endif" href="{{ route('config.calendario_log') }}">
+            <span class="nav-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="8" y1="14" x2="8" y2="14.01" /><line x1="12" y1="14" x2="12" y2="14.01" /><line x1="16" y1="14" x2="16" y2="14.01" />
+                </svg>
+            </span>
+            Log de calendario
+        </a>
+        @endif
+        @can('Configuración.view')
         <a class="nav-link @if (request()->routeIs('config.temas')) active @endif" href="{{ route('config.temas') }}">
             <span class="nav-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -184,7 +206,7 @@
                     <path d="M3 21h18" /><path d="M5 21v-7M9 21v-7M15 21v-7M19 21v-7M3 14h18l-2-7H5z" />
                 </svg>
             </span>
-            Ministries
+            Ministerios
         </a>
         <a class="nav-link @if (request()->routeIs('config.sedes')) active @endif" href="{{ route('config.sedes') }}">
             <span class="nav-icon">
@@ -203,6 +225,7 @@
             Migración
         </a>
         @endcan
+        @endif
     </nav>
 
     <div class="sidebar-footer">

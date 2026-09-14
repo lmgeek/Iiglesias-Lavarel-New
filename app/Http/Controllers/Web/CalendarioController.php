@@ -4,16 +4,14 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\CalendarEvent;
+use App\Models\CalendarLog;
 use App\Models\Relationship;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class CalendarioController extends Controller
 {
-    private array $editRoles = ['Admin', 'Supervisor', 'Lider', 'Pastor'];
-
     public function index(Request $request)
     {
         $month = (int) ($request->get('month') ?? now()->month);
@@ -27,17 +25,10 @@ class CalendarioController extends Controller
             $year = $start->year;
         }
 
-        $gridStart = $start->copy()->subDays($start->dayOfWeek); // lunes
+        $gridStart = $start->copy()->subDays($start->dayOfWeek); // domingo
         $gridEnd = $gridStart->copy()->addDays(41);
 
-        $events = CalendarEvent::whereNull('deleted_at')
-            ->where(function ($query) use ($gridStart, $gridEnd) {
-                $query->whereBetween('start_date', [$gridStart, $gridEnd])
-                    ->orWhere(fn ($recurring) => $recurring->where('is_recurring', true)->where('start_date', '<=', $gridEnd));
-            })
-            ->orderBy('start_date')
-            ->get()
-            ->flatMap(fn ($event) => $this->expandRecurring($event, $gridStart, $gridEnd))
+        $events = CalendarEvent::occurrencesInRange($gridStart, $gridEnd)
             ->groupBy(fn ($event) => $event->start_date?->format('Y-m-d'));
 
         // Build 42 cells (6 weeks)
@@ -75,7 +66,7 @@ class CalendarioController extends Controller
 
     public function store(Request $request)
     {
-        $this->authorizeEdit();
+        $this->authorizeCreate();
 
         $data = $this->validateEvent($request);
         $data['created_by'] = Auth::id();
@@ -83,7 +74,14 @@ class CalendarioController extends Controller
         $data['all_day'] = $request->boolean('all_day');
         $data['is_recurring'] = $request->boolean('is_recurring');
 
-        CalendarEvent::create($data);
+        $event = CalendarEvent::create($data);
+
+        CalendarLog::create([
+            'event_id' => $event->id,
+            'user_id' => Auth::id(),
+            'action' => 'create',
+            'details' => $this->formatDetails($event),
+        ]);
 
         return $this->backToCalendar(now()->create($data['start_date']), 'Evento creado correctamente');
     }
@@ -99,12 +97,26 @@ class CalendarioController extends Controller
 
         $evento->update($data);
 
+        CalendarLog::create([
+            'event_id' => $evento->id,
+            'user_id' => Auth::id(),
+            'action' => 'update',
+            'details' => $this->formatDetails($evento->fresh()),
+        ]);
+
         return $this->backToCalendar(now()->create($request->start_date), 'Evento actualizado correctamente');
     }
 
     public function destroy(Request $request, CalendarEvent $evento)
     {
-        $this->authorizeEdit();
+        $this->authorizeDelete();
+
+        CalendarLog::create([
+            'event_id' => $evento->id,
+            'user_id' => Auth::id(),
+            'action' => 'delete',
+            'details' => $this->formatDetails($evento),
+        ]);
 
         $monthYear = $evento->start_date?->format('Y-m');
         $evento->delete();
@@ -132,42 +144,6 @@ class CalendarioController extends Controller
         ]);
     }
 
-    private function expandRecurring(CalendarEvent $event, Carbon $start, Carbon $end): Collection
-    {
-        if (! $event->is_recurring) {
-            return collect([$event]);
-        }
-
-        $step = match ($event->recurring_frequency) {
-            'daily' => fn (Carbon $date) => $date->addDay(),
-            'weekly' => fn (Carbon $date) => $date->addWeek(),
-            'biweekly' => fn (Carbon $date) => $date->addDays(14),
-            'monthly' => fn (Carbon $date) => $date->addMonth(),
-            'yearly' => fn (Carbon $date) => $date->addYear(),
-            default => fn (Carbon $date) => $date->addDay(),
-        };
-
-        $occurrence = $event->start_date->copy();
-        $stop = $event->recurring_end_date?->copy() ?? $end->copy();
-        $occurrences = collect();
-
-        while ($occurrence->lte($stop)) {
-            if ($occurrence->between($start, $end)) {
-                $clone = clone $event;
-                $clone->start_date = $occurrence->copy();
-                $occurrences->push($clone);
-            }
-
-            $occurrence = $step($occurrence);
-
-            if ($occurrence->gt($stop->copy()->addMonths(24))) {
-                break;
-            }
-        }
-
-        return $occurrences;
-    }
-
     private function backToCalendar(Carbon $date, string $message)
     {
         return redirect()->route('calendario.index', [
@@ -178,14 +154,38 @@ class CalendarioController extends Controller
 
     private function canEdit(): bool
     {
-        $user = Auth::user();
+        return Auth::user()->can('Calendario.edit');
+    }
 
-        return $user->roles->pluck('name')->intersect($this->editRoles)->isNotEmpty()
-            || $user->can('Configuración.edit');
+    private function authorizeCreate(): void
+    {
+        abort_unless(Auth::user()->can('Calendario.create'), 403, 'No tienes permisos para agregar eventos.');
     }
 
     private function authorizeEdit(): void
     {
-        abort_unless($this->canEdit(), 403, 'No tienes permisos para modificar eventos.');
+        abort_unless(Auth::user()->can('Calendario.edit'), 403, 'No tienes permisos para modificar eventos.');
+    }
+
+    private function authorizeDelete(): void
+    {
+        abort_unless(Auth::user()->can('Calendario.delete'), 403, 'No tienes permisos para eliminar eventos.');
+    }
+
+    private function formatDetails(CalendarEvent $event): string
+    {
+        $start = $event->start_date?->format('d/m/Y') ?? '';
+
+        if ($event->start_time) {
+            $start .= ' '.$event->start_time;
+        }
+
+        $parts = [$event->title ?: 'Sin título', $start];
+
+        if ($event->location) {
+            $parts[] = $event->location;
+        }
+
+        return implode(' · ', $parts);
     }
 }

@@ -36,6 +36,8 @@ class User extends Authenticatable
         'remember_token',
         'must_change_password',
         'is_active',
+        'is_leader',
+        'theme',
     ];
 
     protected $hidden = [
@@ -48,6 +50,7 @@ class User extends Authenticatable
         'celula' => 'integer',
         'lider_celula' => 'string',
         'password' => 'hashed',
+        'is_leader' => 'boolean',
     ];
 
     public function mentorUser()
