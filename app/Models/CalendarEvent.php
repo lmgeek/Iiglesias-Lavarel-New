@@ -55,10 +55,7 @@ class CalendarEvent extends Model
             ->orderBy('start_time')
             ->get()
             ->flatMap(fn (CalendarEvent $event) => $event->expandRecurring($start, $end))
-            ->sortBy([
-                fn (CalendarEvent $occurrence) => $occurrence->start_date?->format('Y-m-d'),
-                fn (CalendarEvent $occurrence) => $occurrence->start_time ?? '99:99',
-            ])
+            ->sortBy(fn (CalendarEvent $occurrence) => $occurrence->start_date?->format('Y-m-d').' '.($occurrence->start_time ?? '99:99'))
             ->values();
     }
 

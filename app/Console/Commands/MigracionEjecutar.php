@@ -7,13 +7,14 @@ use Illuminate\Console\Command;
 
 class MigracionEjecutar extends Command
 {
-    protected $signature = 'migracion:ejecutar {source_db} {--force : Forzar ejecución sin confirmación}';
+    protected $signature = 'migracion:ejecutar {source_db} {church?} {--force : Forzar ejecución sin confirmación}';
 
     protected $description = 'Ejecuta migración desde base de datos legacy';
 
     public function handle(MigracionService $migracionService)
     {
         $sourceDb = $this->argument('source_db');
+        $church = $this->argument('church');
         $force = $this->option('force');
 
         if (! $force) {
@@ -27,7 +28,7 @@ class MigracionEjecutar extends Command
         $this->info("Iniciando migración desde {$sourceDb}...");
 
         try {
-            $result = $migracionService->migrate($sourceDb);
+            $result = $migracionService->migrate($sourceDb, $church);
 
             $this->info('Migración completada exitosamente.');
             $this->table(['Tabla', 'Registros'], collect($result['counts'])->map(fn ($v, $k) => [$k, $v])->toArray());

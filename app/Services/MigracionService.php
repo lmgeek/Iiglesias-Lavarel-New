@@ -18,6 +18,12 @@ class MigracionService
     // Tablas gestionadas manualmente (remapeo de ids / dependencias)
     protected $managedTables = ['users', 'relationships', 'reports_celula', 'model_has_roles'];
 
+    // Valores de ministerial_range que no corresponden a ministerios reales
+    protected array $invalidMinistries = ['Ninguno', 'Seleccione el departamento a cargo', 'Hola'];
+
+    // Id del rol 'Lider' en la BD fuente (roles.id = 6)
+    protected int $sourceLiderRoleId = 6;
+
     public function __construct(?string $sourceDb = null)
     {
         $this->sourceConnection = $sourceDb;
@@ -106,8 +112,19 @@ class MigracionService
             ->pluck('id', 'name')
             ->toArray();
 
-        // --- Usuarios (filtrados por iglesia, con remapeo de ids) ---
-        $usersResult = $this->migrateUsers($sourceDb, $church);
+        // --- Calcular ids de usuarios a importar ---
+        $importIds = $this->computeImportIds($sourceDb, $church);
+
+        // --- Ministerios desde ministerial_range ---
+        $ministryMap = $this->createMinistries($sourceDb, $importIds);
+        $counts['ministries'] = count($ministryMap);
+
+        // --- Sedes desde iglesias presentes en el set ---
+        $sedeMap = $this->createSedes($sourceDb, $importIds);
+        $counts['sedes'] = count($sedeMap);
+
+        // --- Usuarios (con remapeo de ids, participantes involucrados incluidos) ---
+        $usersResult = $this->migrateUsers($sourceDb, $church, $importIds, $ministryMap, $sedeMap);
         $counts['users'] = $usersResult['inserted'];
         $idMap = $usersResult['id_map'];
         $warnings = array_merge($warnings, $usersResult['warnings']);
@@ -118,8 +135,8 @@ class MigracionService
         // --- relationships (solo si mentor y discípulo fueron importados) ---
         $counts['relationships'] = $this->migrateRelationships($sourceDb, $idMap);
 
-        // --- reports_celula (mentor resuelto por nombre/célula) ---
-        $reportsResult = $this->migrateReportsCelula($sourceDb, $idMap);
+        // --- reports_celula (mentor resuelto por nombre, solo iglesia destino + aliases confiables) ---
+        $reportsResult = $this->migrateReportsCelula($sourceDb, $idMap, $church);
         $counts['reports_celula'] = $reportsResult['inserted'];
         $warnings = array_merge($warnings, $reportsResult['warnings']);
 
@@ -142,6 +159,139 @@ class MigracionService
             'counts' => $counts,
             'warnings' => $warnings,
         ];
+    }
+
+    // ------------------------------------------------------------------
+    // Cálculo del conjunto de usuarios a importar
+    // ------------------------------------------------------------------
+
+    protected function computeImportIds(string $sourceDb, ?string $church): array
+    {
+        $query = DB::connection($sourceDb)->table('users');
+
+        if ($church === null || $church === '') {
+            return $query->pluck('id')->map(fn ($id) => (int) $id)->values()->toArray();
+        }
+
+        // Usuarios de la iglesia principal
+        $primaryIds = $query->where('church', $church)->pluck('id')->map(fn ($id) => (int) $id)->values()->toArray();
+
+        if (empty($primaryIds)) {
+            return [];
+        }
+
+        // Participantes involucrados: usuarios de otras iglesias que aparecen en
+        // relaciones junto a un usuario de la iglesia principal
+        $primaryIn = implode(',', $primaryIds);
+        $involvedRows = DB::connection($sourceDb)
+            ->select("
+                SELECT DISTINCT u.id
+                FROM users u
+                WHERE u.id IN (
+                    SELECT r.mentor_id FROM relationships r WHERE r.mentor_id IN ($primaryIn) OR r.disciple_id IN ($primaryIn)
+                    UNION
+                    SELECT r.disciple_id FROM relationships r WHERE r.mentor_id IN ($primaryIn) OR r.disciple_id IN ($primaryIn)
+                )
+                AND (u.church IS NULL OR u.church <> ?)
+            ", [$church]);
+
+        $involvedIds = array_map(fn ($r) => (int) $r->id, $involvedRows);
+
+        return array_values(array_unique(array_merge($primaryIds, $involvedIds)));
+    }
+
+    // ------------------------------------------------------------------
+    // Ministerios y sedes
+    // ------------------------------------------------------------------
+
+    protected function createMinistries(string $sourceDb, array $importIds): array
+    {
+        if (empty($importIds)) {
+            return [];
+        }
+
+        $importIn = implode(',', $importIds);
+        $ranges = DB::connection($sourceDb)
+            ->table('users')
+            ->whereRaw("`id` IN ($importIn)")
+            ->whereNotNull('ministerial_range')
+            ->where('ministerial_range', '!=', '')
+            ->distinct()
+            ->pluck('ministerial_range')
+            ->filter(fn ($v) => ! in_array($v, $this->invalidMinistries))
+            ->values()
+            ->toArray();
+
+        $map = [];
+
+        foreach ($ranges as $name) {
+            $existing = DB::connection($this->targetConnection)
+                ->table('ministries')
+                ->where('name', $name)
+                ->value('id');
+
+            if ($existing) {
+                $map[$name] = (int) $existing;
+
+                continue;
+            }
+
+            $id = DB::connection($this->targetConnection)
+                ->table('ministries')
+                ->insertGetId([
+                    'name' => $name,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            $map[$name] = (int) $id;
+        }
+
+        return $map;
+    }
+
+    protected function createSedes(string $sourceDb, array $importIds): array
+    {
+        if (empty($importIds)) {
+            return [];
+        }
+
+        $importIn = implode(',', $importIds);
+        $churches = DB::connection($sourceDb)
+            ->table('users')
+            ->whereRaw("`id` IN ($importIn)")
+            ->whereNotNull('church')
+            ->where('church', '!=', '')
+            ->distinct()
+            ->pluck('church')
+            ->toArray();
+
+        $map = [];
+
+        foreach ($churches as $name) {
+            $existing = DB::connection($this->targetConnection)
+                ->table('sedes')
+                ->where('name', $name)
+                ->value('id');
+
+            if ($existing) {
+                $map[$name] = (int) $existing;
+
+                continue;
+            }
+
+            $id = DB::connection($this->targetConnection)
+                ->table('sedes')
+                ->insertGetId([
+                    'name' => $name,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            $map[$name] = (int) $id;
+        }
+
+        return $map;
     }
 
     // ------------------------------------------------------------------
@@ -216,15 +366,21 @@ class MigracionService
     // Usuarios
     // ------------------------------------------------------------------
 
-    protected function migrateUsers(string $sourceDb, ?string $church): array
+    protected function migrateUsers(string $sourceDb, ?string $church, array $importIds, array $ministryMap, array $sedeMap): array
     {
-        $query = DB::connection($sourceDb)->table('users');
-
-        if ($church !== null && $church !== '') {
-            $query->where('church', $church);
+        if (empty($importIds)) {
+            return ['inserted' => 0, 'id_map' => [], 'warnings' => []];
         }
 
-        $rows = $query->get();
+        $importIn = implode(',', $importIds);
+        $rows = DB::connection($sourceDb)
+            ->table('users')
+            ->whereRaw("`id` IN ($importIn)")
+            ->get();
+
+        // Consultar ids de usuarios con rol Lider en la fuente (para is_leader)
+        $liderIds = $this->getLiderUserIds($sourceDb, $importIds);
+        $liderSet = array_flip($liderIds);
 
         $inserted = 0;
         $idMap = [];
@@ -251,8 +407,18 @@ class MigracionService
 
             $docNumber = ($row->doc_number ?? '') !== '' ? $row->doc_number : 'IMPORT-'.$oldId.'-'.$sourceDb;
 
+            $ministryId = null;
+            if (! empty($row->ministerial_range) && isset($ministryMap[$row->ministerial_range])) {
+                $ministryId = $ministryMap[$row->ministerial_range];
+            }
+
+            $sedeId = null;
+            if (! empty($row->church) && isset($sedeMap[$row->church])) {
+                $sedeId = $sedeMap[$row->church];
+            }
+
             $data = [
-                'uuid' => (string) Str::uuid(),
+                'uuid' => ! empty($row->uuid) ? $row->uuid : (string) Str::uuid(),
                 'fullname' => $row->fullname,
                 'born_date' => $row->born_date ?? '',
                 'sex' => $row->sex ?? null,
@@ -262,12 +428,15 @@ class MigracionService
                 'church' => $row->church ?? null,
                 'mentor' => $row->mentor ?? null,
                 'ministerial_range' => $row->ministerial_range ?? null,
+                'ministry_id' => $ministryId,
+                'sede_id' => $sedeId,
                 'celula' => $row->celula ?? null,
                 'doc_number' => $docNumber,
                 'lider_celula' => $row->lider_celula ?? 'No',
-                'password' => null,
-                'must_change_password' => 1,
-                'is_active' => 1,
+                'password' => $row->password ?? null,
+                'must_change_password' => false,
+                'is_active' => true,
+                'is_leader' => isset($liderSet[$oldId]),
                 'created_at' => $row->created_at ?? null,
                 'updated_at' => $row->updated_at ?? null,
             ];
@@ -293,8 +462,8 @@ class MigracionService
             }
         }
 
-        if (count($warnings) > 0) {
-            $warnings[] = "Usuarios importados: $inserted. Los contraseñas se importan en blanco (deben restablecerla, must_change_password=1).";
+        if ($inserted > 0) {
+            $warnings[] = "Usuarios importados: $inserted. Contraseñas preservadas del origen.";
         }
 
         return ['inserted' => $inserted, 'id_map' => $idMap, 'warnings' => $warnings];
@@ -316,6 +485,26 @@ class MigracionService
         } catch (Exception $e) {
             return [];
         }
+    }
+
+    protected function getLiderUserIds(string $sourceDb, array $importIds): array
+    {
+        if (empty($importIds)) {
+            return [];
+        }
+
+        $importIn = implode(',', $importIds);
+
+        return DB::connection($sourceDb)
+            ->table('model_has_roles')
+            ->where('role_id', $this->sourceLiderRoleId)
+            ->where('model_type', 'App\\Models\\User')
+            ->whereRaw("`model_id` IN ($importIn)")
+            ->pluck('model_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->toArray();
     }
 
     protected function migrateUserRoles(string $sourceDb, array $idMap, array $sourceRoles, array $targetRolesByName): int
@@ -435,7 +624,7 @@ class MigracionService
     // Reports célula
     // ------------------------------------------------------------------
 
-    protected function migrateReportsCelula(string $sourceDb, array $idMap): array
+    protected function migrateReportsCelula(string $sourceDb, array $idMap, ?string $church): array
     {
         $inserted = 0;
         $skipped = 0;
@@ -447,14 +636,15 @@ class MigracionService
 
         $oldIds = array_keys($idMap);
 
-        // Índices de usuarios importados: por nombre normalizado y por número de célula
+        // Índices de usuarios importados: solo de la iglesia destino
         $byName = [];
         $byCelula = [];
 
-        $sourceUsers = DB::connection($sourceDb)
-            ->table('users')
-            ->whereIn('id', $oldIds)
-            ->get();
+        $sourceUsersQuery = DB::connection($sourceDb)->table('users')->whereIn('id', $oldIds);
+        if ($church !== null && $church !== '') {
+            $sourceUsersQuery->where('church', $church);
+        }
+        $sourceUsers = $sourceUsersQuery->get();
 
         foreach ($sourceUsers as $user) {
             $newId = $idMap[(int) $user->id];
@@ -473,16 +663,38 @@ class MigracionService
             }
         }
 
+        // Aliases confiables: nombres con typos conocidos → usuario Once
+        // figueroa tino (reordenado) → Tino Figueroa
+        // marcelo esteban martínez → Esteban Martínez
+        $fuzzyAliases = [];
+
+        $tinoTarget = $byName[$this->normalizeName('Tino Figueroa')] ?? null;
+        if ($tinoTarget !== null) {
+            $fuzzyAliases[$this->normalizeName('Figueroa Tino')] = $tinoTarget;
+        }
+
+        $estebanTarget = $byName[$this->normalizeName('Esteban Martínez')] ?? null;
+        if ($estebanTarget !== null) {
+            $fuzzyAliases[$this->normalizeName('Marcelo Esteban Martínez')] = $estebanTarget;
+        }
+
         DB::connection($sourceDb)
             ->table('reports_celula')
-            ->chunkById(300, function ($rows) use ($byName, $byCelula, &$inserted, &$skipped) {
+            ->chunkById(300, function ($rows) use ($byName, $byCelula, $fuzzyAliases, &$inserted, &$skipped) {
                 foreach ($rows as $row) {
                     $mentorId = null;
                     $nameKey = $this->normalizeName($row->lider ?? '');
 
+                    // 1. Nombre exacto
                     if ($nameKey !== '' && isset($byName[$nameKey])) {
                         $mentorId = $byName[$nameKey];
-                    } elseif ($row->celula !== null && $row->celula !== '' && isset($byCelula[(string) $row->celula])) {
+                    }
+                    // 2. Alias confiable (typos conocidos)
+                    elseif (isset($fuzzyAliases[$nameKey])) {
+                        $mentorId = $fuzzyAliases[$nameKey];
+                    }
+                    // 3. Célula como fallback
+                    elseif ($row->celula !== null && $row->celula !== '' && isset($byCelula[(string) $row->celula])) {
                         $mentorId = $byCelula[(string) $row->celula];
                     }
 

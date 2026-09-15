@@ -9,15 +9,14 @@ return new class extends Migration
     public function up(): void
     {
         // Quitar dependencias de la tabla pastors en tablas que se conservan
-        Schema::table('diezmos', function (Blueprint $table) {
-            $table->dropForeign(['pastor_id']);
-            $table->dropColumn('pastor_id');
-        });
-
-        Schema::table('intercesion', function (Blueprint $table) {
-            $table->dropForeign(['pastor_id']);
-            $table->dropColumn('pastor_id');
-        });
+        foreach (['diezmos', 'intercesion'] as $table) {
+            Schema::table($table, function (Blueprint $blueprint) {
+                if (Schema::hasColumn($blueprint->getTable(), 'pastor_id')) {
+                    $blueprint->dropForeign(['pastor_id']);
+                    $blueprint->dropColumn('pastor_id');
+                }
+            });
+        }
 
         // Eliminar tablas (orden: hijas antes que padres por las FKs)
         Schema::dropIfExists('members');
